@@ -7,6 +7,7 @@
 #include <unistd.h>
 
 #include "utils.h"
+#include "ogg/ogg.h"
 
 #define PROG "soggy"
 
