@@ -9,6 +9,8 @@
 #include "utils.h"
 #include "ogg/ogg.h"
 
+#define BUFSIZE 4096
+
 #define PROG "soggy"
 
 static void usage() {
@@ -44,10 +46,55 @@ static void parse_options(int *argc, char ***argv) {
   *argv += optind;
 }
 
+static void segment(FILE *in) {
+  ogg_sync_state ss;
+  ogg_page page;
+
+  ogg_sync_init(&ss);
+
+  while (!feof(in)) {
+    char *buf = ogg_sync_buffer(&ss, BUFSIZE);
+    if (!buf) die("Buffer allocation failed");
+    size_t got = fread(buf, 1, BUFSIZE, in);
+    if (ferror(in)) die("Read error: %m");
+    if (got == 0) continue;
+    ogg_sync_wrote(&ss, got);
+
+    if (ogg_sync_pageout(&ss, &page) != 1) continue;
+
+    printf("version: %d, continued: %d, bos: %d, eos: %d, "
+           "granulepos: %12lld, serialno: %08x, pageno: %8ld, packets: %8d\n",
+           ogg_page_version(&page),
+           ogg_page_continued(&page),
+           ogg_page_bos(&page),
+           ogg_page_eos(&page),
+           ogg_page_granulepos(&page),
+           ogg_page_serialno(&page),
+           ogg_page_pageno(&page),
+           ogg_page_packets(&page)
+          );
+  }
+}
+
 int main(int argc, char *argv[]) {
   parse_options(&argc, &argv);
+  segment(stdin);
   return 0;
 }
 
 /* vim:ts=2:sw=2:sts=2:et:ft=c
  */
+
+
+
+
+
+
+
+
+
+
+
+
+
+
