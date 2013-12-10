@@ -44,7 +44,6 @@ static void parse_options(int *argc, char ***argv) {
 }
 
 int main(int argc, char *argv[]) {
-  int argn;
   parse_options(&argc, &argv);
   return 0;
 }
