@@ -9,7 +9,7 @@ bin_PROGRAMS = soggy
 soggy_SOURCES = soggy.c utils.c utils.h
 
 soggy_CFLAGS = $(libogg_CFLAGS)
-soggy_LDFLAGS = $(libogg_LDFLAGS)
+soggy_LDFLAGS = $(libogg_LIBS)
 
 test: all
 	cd t && $(MAKE) test
