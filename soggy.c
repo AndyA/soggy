@@ -10,6 +10,7 @@
 #include "ogg/ogg.h"
 
 #define BUFSIZE 4096
+#define HDR_PKT 3
 
 #define PROG "soggy"
 
@@ -46,9 +47,25 @@ static void parse_options(int *argc, char ***argv) {
   *argv += optind;
 }
 
-static void segment(FILE *in) {
+static ogg_packet *packet_dup(ogg_packet *out, const ogg_packet *op) {
+  *out = *op;
+  out->packet = alloc(out->bytes);
+  memcpy(out->packet, op->packet, op->bytes);
+  return out;
+}
+
+static void segment(FILE *in, const char *out) {
+  FILE *out = NULL;
+  unsigned long seq = 0;
+
   ogg_sync_state ss;
+  ogg_stream_state instream;
   ogg_page page;
+
+  ogg_packet op;
+  ogg_packet hdr[HDR_PKT];
+  int pos = 0;
+  int inited = 0;
 
   ogg_sync_init(&ss);
 
@@ -73,17 +90,63 @@ static void segment(FILE *in) {
            ogg_page_pageno(&page),
            ogg_page_packets(&page)
           );
+
+    if (!inited) {
+      ogg_stream_init(&instream, ogg_page_serialno(&page));
+      inited = 1;
+    }
+
+    if (ogg_stream_pagein(&instream, &page) < 0)
+      die("Can't decode page");
+
+    if (ogg_stream_packetout(&instream, &op) != 1) continue;
+
+    /* Stash header packets for replay */
+    if (pos < HDR_PKT) {
+      packet_dup(&hdr[pos++], &op);
+      continue;
+    }
+
+    if (!out) {
+    }
   }
 }
 
 int main(int argc, char *argv[]) {
   parse_options(&argc, &argv);
-  segment(stdin);
+  if (argc != 1) die("soggy <outfile%%08d.ogg>");
+  segment(stdin, argv[0]);
   return 0;
 }
 
-/* vim:ts=2:sw=2:sts=2:et:ft=c
+/* vim:instream=2:sw=2:sts=2:et:ft=c
  */
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
