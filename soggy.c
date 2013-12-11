@@ -93,13 +93,16 @@ static void write_page(struct work *w, ogg_page *p) {
   write_bytes(w->out, p->body, p->body_len);
 }
 
+static void flush_out(struct work *w) {
+  ogg_page page;
+  while (ogg_stream_flush(&w->os, &page)) {
+    write_page(w, &page);
+  }
+}
+
 static void close_out(struct work *w) {
   if (w->out) {
-    ogg_page page;
-    while (ogg_stream_flush(&w->os, &page)) {
-      write_page(w, &page);
-    }
-
+    flush_out(w);
     fclose(w->out);
     w->out = NULL;
     segname_rename(w->seg);
@@ -125,6 +128,15 @@ static void next_file(struct work *w) {
     if (ogg_stream_pageout(&w->os, &page))
       write_page(w, &page);
   }
+  flush_out(w);
+}
+
+static void send_packet(struct work *w, ogg_packet *op) {
+  ogg_page page;
+  if (ogg_stream_packetin(&w->os, op) < 0)
+    die("Can't write header packet");
+  while (ogg_stream_pageout(&w->os, &page))
+    write_page(w, &page);
 }
 
 static void segment(FILE *in, segname *seg, double gop) {
@@ -173,33 +185,38 @@ static void segment(FILE *in, segname *seg, double gop) {
     if (ogg_stream_pagein(&w.is, &page) < 0)
       die("Can't decode page");
 
-    if (ogg_stream_packetout(&w.is, &w.op) != 1) continue;
+    while (ogg_stream_packetout(&w.is, &w.op) == 1) {
 
-    /* Stash header packets for replay */
-    if (w.pos < HDR_PKT) {
-      vorbis_synthesis_headerin(&w.vi, &w.vc, &w.op);
-      packet_dup(&w.hdr[w.pos++], &w.op);
-      if (w.pos == HDR_PKT) {
-        if (vorbis_synthesis_init(&w.vds, &w.vi) < 0)
-          die("Can't init Vorbis decoder");
-        if (vorbis_block_init(&w.vds, &vb) < 0)
-          die("Can't init block");
+      /* Stash header packets for replay */
+      if (w.pos < HDR_PKT) {
+        vorbis_synthesis_headerin(&w.vi, &w.vc, &w.op);
+        packet_dup(&w.hdr[w.pos++], &w.op);
+        if (w.pos == HDR_PKT) {
+          if (vorbis_synthesis_init(&w.vds, &w.vi) < 0)
+            die("Can't init Vorbis decoder");
+          if (vorbis_block_init(&w.vds, &vb) < 0)
+            die("Can't init block");
+        }
+        continue;
       }
-      continue;
+
+      vorbis_synthesis_trackonly(&vb, &w.op);
+      vorbis_synthesis_blockin(&w.vds, &vb);
+
+      double tm = vorbis_granule_time(&w.vds, ogg_page_granulepos(&page));
+
+      if (!w.out) next_file(&w);
+
+      if (tm >= sent + gop) {
+        w.op.e_o_s = 1;
+        send_packet(&w, &w.op);
+        close_out(&w);
+        sent = tm;
+      }
+      else {
+        send_packet(&w, &w.op);
+      }
     }
-
-    vorbis_synthesis_trackonly(&vb, &w.op);
-    vorbis_synthesis_blockin(&w.vds, &vb);
-
-    double tm = vorbis_granule_time(&w.vds, ogg_page_granulepos(&page));
-
-    if (!w.out || tm >= sent + gop)
-      next_file(&w);
-
-    if (ogg_stream_packetin(&w.os, &w.op) < 0)
-      die("Can't write header packet");
-    if (ogg_stream_pageout(&w.os, &page))
-      write_page(&w, &page);
   }
 
   close_out(&w);
@@ -216,6 +233,21 @@ int main(int argc, char *argv[]) {
 
 /* vim:is=2:sw=2:sts=2:et:ft=c
  */
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
