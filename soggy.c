@@ -77,10 +77,14 @@ struct work {
 };
 
 static int new_sn(struct work *w) {
+#if 0
+  return w->sn;
+#else
   int nsn = rand();
   while (nsn == w->sn) nsn = rand();
   w->sn = nsn;
   return w->sn;
+#endif
 }
 
 static void write_bytes(FILE *fl, void *b, size_t len) {
@@ -177,7 +181,8 @@ static void segment(FILE *in, segname *seg, double gop) {
           );
 
     if (!inited) {
-      if (ogg_stream_init(&w.is, ogg_page_serialno(&page)) < 0)
+      w.sn = ogg_page_serialno(&page);
+      if (ogg_stream_init(&w.is, w.sn) < 0)
         die("Can't init stream");
       inited = 1;
     }
@@ -203,9 +208,9 @@ static void segment(FILE *in, segname *seg, double gop) {
       vorbis_synthesis_trackonly(&vb, &w.op);
       vorbis_synthesis_blockin(&w.vds, &vb);
 
-      double tm = vorbis_granule_time(&w.vds, ogg_page_granulepos(&page));
-
       if (!w.out) next_file(&w);
+
+      double tm = vorbis_granule_time(&w.vds, ogg_page_granulepos(&page));
 
       if (tm >= sent + gop) {
         w.op.e_o_s = 1;
@@ -233,6 +238,8 @@ int main(int argc, char *argv[]) {
 
 /* vim:is=2:sw=2:sts=2:et:ft=c
  */
+
+
 
 
 
